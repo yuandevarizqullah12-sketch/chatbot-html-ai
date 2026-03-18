@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chat</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Markdown library (lightweight) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="chat-container">
+    <header class="chat-header">
+      <div class="header-left">
+        <svg class="logo" viewBox="0 0 24 24" width="28" height="28">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" fill="currentColor"/>
+        </svg>
+        <h1>AI Assistant</h1>
+      </div>
+      <span class="model-badge">llama-3.1-8b</span>
+    </header>
+
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <div class="typing-indicator" id="typingIndicator">
+      <span></span><span></span><span></span>
+    </div>
+
+    <div class="input-area">
+      <textarea id="userInput" placeholder="Message AI..." rows="1"></textarea>
+      <button id="sendButton" disabled>
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="error-toast" id="errorToast">Something went wrong. Please try again.</div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
