@@ -6,17 +6,12 @@ export default async function handler(req, res) {
   const { messages } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'Invalid request: messages array required' });
+    return res.status(400).json({ error: 'Invalid messages' });
   }
 
+  const API_KEY = process.env.VITE_GROQ_API_KEY;
   const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
   const MODEL = 'llama-3.1-8b-instant';
-  const API_KEY = process.env.GROQ_API_KEY; // 
-
-  if (!API_KEY) {
-    console.error('Missing API key');
-    return res.status(500).json({ error: 'Server configuration error' });
-  }
 
   try {
     const response = await fetch(API_URL, {
@@ -27,24 +22,20 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: MODEL,
-        messages: messages,
+        messages,
         temperature: 0.7,
         max_tokens: 1024,
       }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Groq API error:', errorData);
-      return res.status(response.status).json({ error: errorData.error?.message || 'API request failed' });
+      const errorData = await response.json();
+      return res.status(response.status).json({ error: errorData.error?.message || 'API error' });
     }
 
     const data = await response.json();
-    const assistantMessage = data.choices[0].message.content;
-
-    return res.status(200).json({ content: assistantMessage });
+    res.status(200).json({ content: data.choices[0].message.content });
   } catch (error) {
-    console.error('Internal server error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 }
