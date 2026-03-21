@@ -1,13 +1,17 @@
-// ===== CONFIG =====
-const API_BASE = ''; // relative to current origin
+// Konfigurasi - ganti dengan nilai sebenarnya
+const CONFIG = {
+  // Google Client ID (dari Firebase atau Google Cloud)
+  GOOGLE_CLIENT_ID: '1068057413521-hcqqfmofjtuf0uru26d71uqquusf20hl.apps.googleusercontent.com',
+  // Backend akan menggunakan environment variables, jadi tidak perlu di sini
+};
 
 // Global state
 let currentUser = null;
 let currentChatId = null;
-let chats = []; // array of { id, title, messages, mode }
+let chats = [];
 let messages = [];
 let isLoading = false;
-let currentMode = 'ai'; // 'ai' or 'search'
+let currentMode = 'ai';
 
 // DOM elements
 const authModal = document.getElementById('authModal');
@@ -16,7 +20,6 @@ const sidebar = document.getElementById('sidebar');
 const menuToggle = document.getElementById('menuToggle');
 const closeSidebarBtn = document.getElementById('closeSidebarBtn');
 const chatHistoryEl = document.getElementById('chatHistory');
-const userInfo = document.getElementById('userInfo');
 const userAvatar = document.getElementById('userAvatar');
 const userName = document.getElementById('userName');
 const logoutBtn = document.getElementById('logoutBtn');
@@ -30,13 +33,11 @@ const modeButtons = document.querySelectorAll('.mode-btn');
 const googleSignInBtn = document.getElementById('googleSignInBtn');
 const demoBtn = document.getElementById('demoBtn');
 
-// Markdown parser
+// Markdown
 const { marked } = window;
-if (marked) {
-  marked.setOptions({ breaks: true, gfm: true });
-}
+if (marked) marked.setOptions({ breaks: true, gfm: true });
 
-// ===== HELPER FUNCTIONS =====
+// Helper functions
 function showError(msg) {
   errorToast.textContent = msg;
   errorToast.classList.add('show');
@@ -52,13 +53,11 @@ function escapeHTML(text) {
 function renderMessage(role, content, isError = false) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `message ${role}${isError ? ' error' : ''}`;
-
-  if (role === 'assistant' && marked) {
+  if (role === 'assistant' && marked && !isError) {
     msgDiv.innerHTML = marked.parse(content);
   } else {
     msgDiv.innerHTML = escapeHTML(content).replace(/\n/g, '<br>');
   }
-
   chatMessages.appendChild(msgDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -81,7 +80,7 @@ function loadChat(chatId) {
 async function loadHistory() {
   if (!currentUser) return;
   try {
-    const res = await fetch(`${API_BASE}/api/history?userId=${currentUser.id}`);
+    const res = await fetch(`/api/history?userId=${currentUser.id}`);
     if (res.ok) {
       chats = await res.json();
       renderHistory();
@@ -114,7 +113,7 @@ function renderHistory() {
 async function saveChat(chat) {
   if (!currentUser) return;
   try {
-    await fetch(`${API_BASE}/api/history`, {
+    await fetch('/api/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUser.id, chat })
@@ -139,15 +138,15 @@ function newChat() {
   if (window.innerWidth <= 768) sidebar.classList.remove('open');
 }
 
-// ===== AUTHENTICATION =====
+// Auth
 function handleCredentialResponse(response) {
-  // Decode JWT to get user info
   const data = parseJwt(response.credential);
   currentUser = {
     id: data.sub,
     name: data.name,
     email: data.email,
-    picture: data.picture
+    picture: data.picture,
+    isGuest: false
   };
   authModal.style.display = 'none';
   app.style.display = 'flex';
@@ -166,32 +165,35 @@ function parseJwt(token) {
 
 function updateUserInfo() {
   if (currentUser) {
-    userAvatar.src = currentUser.picture;
-    userName.textContent = currentUser.name;
+    userAvatar.src = currentUser.picture || 'https://ui-avatars.com/api/?name=User&background=10a37f&color=fff';
+    userName.textContent = currentUser.name || (currentUser.isGuest ? 'Guest' : 'User');
   }
 }
 
-// Demo login (guest)
 demoBtn.addEventListener('click', () => {
   currentUser = {
     id: 'guest-' + Date.now(),
     name: 'Guest User',
-    picture: 'https://ui-avatars.com/api/?name=Guest&background=10a37f&color=fff'
+    picture: 'https://ui-avatars.com/api/?name=Guest&background=10a37f&color=fff',
+    isGuest: true
   };
   authModal.style.display = 'none';
   app.style.display = 'flex';
   updateUserInfo();
-  loadHistory(); // This will load from mock DB; for guest, we can start empty
-  // If no history, create new chat
+  loadHistory();
   if (chats.length === 0) newChat();
 });
 
 googleSignInBtn.addEventListener('click', () => {
+  if (!CONFIG.GOOGLE_CLIENT_ID || CONFIG.GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
+    showError('Google Sign-In not configured. Please use Demo mode.');
+    return;
+  }
   google.accounts.id.initialize({
-    client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
     callback: handleCredentialResponse
   });
-  google.accounts.id.prompt(); // or direct sign-in
+  google.accounts.id.prompt();
 });
 
 logoutBtn.addEventListener('click', () => {
@@ -203,21 +205,15 @@ logoutBtn.addEventListener('click', () => {
   clearMessages();
 });
 
-// ===== UI TOGGLES =====
-menuToggle.addEventListener('click', () => {
-  sidebar.classList.toggle('open');
-});
-
-closeSidebarBtn.addEventListener('click', () => {
-  sidebar.classList.remove('open');
-});
+// UI toggles
+menuToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+closeSidebarBtn.addEventListener('click', () => sidebar.classList.remove('open'));
 
 modeButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     modeButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentMode = btn.dataset.mode;
-    // Optionally update current chat's mode
     if (currentChatId) {
       const chat = chats.find(c => c.id === currentChatId);
       if (chat) {
@@ -234,7 +230,7 @@ function updateModeUI() {
   });
 }
 
-// ===== CHAT FUNCTIONALITY =====
+// Chat logic
 userInput.addEventListener('input', () => {
   userInput.style.height = 'auto';
   userInput.style.height = Math.min(userInput.scrollHeight, 150) + 'px';
@@ -249,17 +245,14 @@ async function sendMessage() {
   const content = userInput.value.trim();
   if (!content || isLoading) return;
 
-  // Add user message to UI and history
   messages.push({ role: 'user', content });
   renderMessage('user', content);
 
-  // Clear input
   userInput.value = '';
   userInput.style.height = 'auto';
   updateSendButton();
 
-  // Update chat title if first message
-  if (messages.length === 2) { // after welcome message + first user
+  if (messages.length === 2) {
     const chat = chats.find(c => c.id === currentChatId);
     if (chat) {
       chat.title = content.slice(0, 30) + (content.length > 30 ? '...' : '');
@@ -269,89 +262,79 @@ async function sendMessage() {
   }
 
   setLoading(true);
-
   try {
-    let assistantReply;
+    let reply;
     if (currentMode === 'search') {
-      assistantReply = await callSearchAPI(content);
+      reply = await callSearchAPI(content);
     } else {
-      assistantReply = await callChatAPI(content);
+      reply = await callChatAPI(content);
     }
-
-    messages.push({ role: 'assistant', content: assistantReply });
-    renderMessage('assistant', assistantReply);
-
-    // Save chat after response
+    messages.push({ role: 'assistant', content: reply });
+    renderMessage('assistant', reply);
     const chat = chats.find(c => c.id === currentChatId);
     if (chat) {
       chat.messages = messages;
       saveChat(chat);
     }
   } catch (error) {
-    console.error('Error:', error);
-    showError('Failed to get response. Please try again.');
-    renderMessage('system', '⚠️ Error: Could not get response. Please check your connection.', true);
+    console.error(error);
+    showError(error.message || 'Failed to get response. Please try again.');
+    renderMessage('system', `⚠️ ${error.message || 'Error'}. Please try again.`, true);
   } finally {
     setLoading(false);
   }
 }
 
 async function callChatAPI(userContent) {
-  const response = await fetch(`${API_BASE}/api/chat`, {
+  const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      messages: [...messages, { role: 'user', content: userContent }]
+      messages: [...messages, { role: 'user', content: userContent }],
+      userId: currentUser.id,
+      isGuest: currentUser.isGuest || false
     })
   });
-
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'API error');
+    throw new Error(err.error || `HTTP ${response.status}`);
   }
-
   const data = await response.json();
   return data.content;
 }
 
 async function callSearchAPI(userContent) {
-  // First perform search
-  const searchRes = await fetch(`${API_BASE}/api/search`, {
+  // search first
+  const searchRes = await fetch('/api/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: userContent })
   });
-
-  if (!searchRes.ok) {
-    throw new Error('Search failed');
-  }
-
+  if (!searchRes.ok) throw new Error('Search failed');
   const searchData = await searchRes.json();
-  const searchContext = formatSearchResults(searchData.results);
-
-  // Then call chat with context
+  const context = formatSearchResults(searchData.results);
+  // then chat with context
   const enhancedMessages = [
     ...messages,
-    { role: 'system', content: `Here is some up-to-date information from the web that may help answer the user's query:\n\n${searchContext}` },
+    { role: 'system', content: `Relevant information from the web:\n${context}` },
     { role: 'user', content: userContent }
   ];
-
-  const chatRes = await fetch(`${API_BASE}/api/chat`, {
+  const chatRes = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: enhancedMessages })
+    body: JSON.stringify({
+      messages: enhancedMessages,
+      userId: currentUser.id,
+      isGuest: currentUser.isGuest || false
+    })
   });
-
-  if (!chatRes.ok) {
-    throw new Error('Chat API failed');
-  }
-
+  if (!chatRes.ok) throw new Error('Chat API failed');
   const chatData = await chatRes.json();
   return chatData.content;
 }
 
 function formatSearchResults(results) {
-  if (!results || results.length === 0) return 'No search results found.';
+  if (!results || results.length === 0) return 'No search results.';
   return results.map(r => `- ${r.title}: ${r.snippet} (${r.url})`).join('\n');
 }
 
@@ -359,25 +342,18 @@ function setLoading(loading) {
   isLoading = loading;
   userInput.disabled = loading;
   updateSendButton();
-
-  if (loading) {
-    typingIndicator.classList.add('visible');
-  } else {
-    typingIndicator.classList.remove('visible');
-  }
+  if (loading) typingIndicator.classList.add('visible');
+  else typingIndicator.classList.remove('visible');
 }
 
-// Event listeners
 sendButton.addEventListener('click', sendMessage);
-userInput.addEventListener('keydown', (e) => {
+userInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
   }
 });
-
 newChatBtn.addEventListener('click', newChat);
 
-// Initialize with modal visible
 authModal.style.display = 'flex';
 app.style.display = 'none';
