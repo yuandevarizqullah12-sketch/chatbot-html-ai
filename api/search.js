@@ -8,19 +8,36 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing query' });
   }
 
+  console.log('Search query:', query);
+
   try {
     // Prioritize Wikipedia
-    let results = await searchWikipedia(query);
+    let results = [];
+    
+    console.log('Searching Wikipedia...');
+    results = await searchWikipedia(query);
+    console.log(`Wikipedia found ${results.length} results`);
+    
     if (results.length === 0) {
+      console.log('Searching RSS...');
       results = await searchRSS(query);
+      console.log(`RSS found ${results.length} results`);
     }
+    
     if (results.length === 0 && process.env.GOOGLE_CSE_KEY && process.env.GOOGLE_CSE_ID) {
+      console.log('Searching Google Custom Search...');
+      console.log('GOOGLE_CSE_KEY exists:', !!process.env.GOOGLE_CSE_KEY);
+      console.log('GOOGLE_CSE_ID exists:', !!process.env.GOOGLE_CSE_ID);
       results = await searchGoogleCustom(query);
+      console.log(`Google CSE found ${results.length} results`);
     }
+    
+    console.log('Total results:', results.length);
     res.status(200).json({ results });
   } catch (error) {
-    console.error('Search error:', error);
-    res.status(500).json({ error: 'Search failed' });
+    console.error('Search error DETAIL:', error.message);
+    console.error('Search error stack:', error.stack);
+    res.status(500).json({ error: 'Search failed: ' + error.message });
   }
 }
 
@@ -53,13 +70,32 @@ async function searchRSS(query) {
 async function searchGoogleCustom(query) {
   const apiKey = process.env.GOOGLE_CSE_KEY;
   const cx = process.env.GOOGLE_CSE_ID;
+  
+  if (!apiKey || !cx) {
+    console.log('Google CSE credentials missing');
+    return [];
+  }
+  
   const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}`;
-  const response = await fetch(url);
-  const data = await response.json();
-  return (data.items || []).map(item => ({
-    title: item.title,
-    snippet: item.snippet,
-    url: item.link,
-    source: 'Google Custom'
-  }));
+  console.log('Google CSE URL:', url.replace(apiKey, 'HIDDEN'));
+  
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('Google CSE API error:', data.error);
+      return [];
+    }
+    
+    return (data.items || []).map(item => ({
+      title: item.title,
+      snippet: item.snippet,
+      url: item.link,
+      source: 'Google Search'
+    }));
+  } catch (error) {
+    console.error('Google CSE fetch error:', error.message);
+    return [];
+  }
 }
